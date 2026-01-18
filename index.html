@@ -2,177 +2,172 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TopAI - Générative</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TopAI Mobile</title>
+    
     <link rel="stylesheet" href="https://pyscript.net/latest/pyscript.css" />
     <script defer src="https://pyscript.net/latest/pyscript.js"></script>
 
     <style>
-        :root { --bg: #0f0f0f; --sidebar: #181818; --user: #0056b3; --ai: #2a2a2a; }
-        body { font-family: 'Consolas', 'Courier New', monospace; background: var(--bg); color: #ddd; display: flex; height: 100vh; margin: 0; overflow: hidden; }
-        
-        /* Sidebar */
-        #sidebar { width: 250px; background: var(--sidebar); border-right: 1px solid #333; display: flex; flex-direction: column; padding: 10px; }
-        h2 { color: #00ff41; text-shadow: 0 0 5px #00ff41; margin-bottom: 20px; text-align: center;}
-        .stat-box { font-size: 0.8rem; color: #888; margin-top: auto; padding: 10px; border-top: 1px solid #333; }
+        /* --- LE FIX POUR LES ÉCRITURES BIZARRES --- */
+        py-loader, .py-error, .py-splash {
+            display: none !important;
+            visibility: hidden !important;
+        }
 
-        /* Chat */
-        #main { flex-grow: 1; display: flex; flex-direction: column; position: relative; }
-        #chat-window { flex-grow: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; scroll-behavior: smooth; }
+        :root { --bg: #050505; --accent: #00ff41; --user-blue: #007bff; }
         
-        .message { max-width: 85%; padding: 15px; border-radius: 5px; line-height: 1.6; animation: fadeIn 0.3s ease; }
-        .user { align-self: flex-end; background: var(--user); color: white; border-bottom-right-radius: 0; }
-        .ai { align-self: flex-start; background: var(--ai); border-left: 3px solid #00ff41; border-bottom-left-radius: 0; }
-        
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica; 
+            background: var(--bg); color: white; margin: 0; 
+            display: flex; flex-direction: column; height: 100vh;
+        }
 
-        /* Input */
-        #input-area { padding: 20px; background: var(--sidebar); display: flex; gap: 10px; }
-        input { flex-grow: 1; background: #000; border: 1px solid #333; color: #00ff41; padding: 12px; font-family: inherit; }
-        button { background: #00ff41; color: black; border: none; padding: 0 20px; cursor: pointer; font-weight: bold; }
-        button:hover { background: #00cc33; }
-        
-        /* Loader */
-        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #00ff41; font-size: 1.2rem; background: rgba(0,0,0,0.8); padding: 20px; z-index: 100;}
+        /* Sidebar Mobile */
+        #sidebar {
+            position: fixed; left: 0; top: 0; bottom: 0; width: 280px;
+            background: #111; z-index: 1000; transform: translateX(-100%);
+            transition: 0.3s ease; border-right: 1px solid #333;
+        }
+        #sidebar.open { transform: translateX(0); }
+
+        /* Header */
+        header {
+            padding: 15px; background: #111; border-bottom: 1px solid #222;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+
+        #chat-window {
+            flex-grow: 1; overflow-y: auto; padding: 15px;
+            display: flex; flex-direction: column; gap: 12px;
+            -webkit-overflow-scrolling: touch; /* Scroll fluide iOS */
+        }
+
+        .message {
+            max-width: 85%; padding: 12px 16px; border-radius: 18px;
+            font-size: 15px; line-height: 1.5; word-wrap: break-word;
+        }
+        .user { align-self: flex-end; background: var(--user-blue); border-bottom-right-radius: 4px; }
+        .ai { align-self: flex-start; background: #222; border: 1px solid #333; border-bottom-left-radius: 4px; }
+
+        /* Input Zone Optimisée Mobile */
+        #input-area {
+            padding: 10px; background: #111; border-top: 1px solid #222;
+            display: flex; gap: 8px; padding-bottom: calc(10px + env(safe-area-inset-bottom));
+        }
+
+        input {
+            flex-grow: 1; background: #1a1a1a; border: 1px solid #333;
+            color: white; padding: 12px; border-radius: 25px; outline: none; font-size: 16px; /* Évite le zoom auto sur iOS */
+        }
+
+        button {
+            background: var(--accent); color: black; border: none;
+            padding: 0 20px; border-radius: 25px; font-weight: bold; cursor: pointer;
+        }
+
+        /* Overlay quand menu ouvert */
+        #overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999;
+        }
+        #overlay.active { display: block; }
+
+        #loading-screen {
+            position: fixed; inset: 0; background: #000; z-index: 9999;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
     </style>
 </head>
 <body>
 
-    <div id="loading">Initialisation du Réseau de Neurones...</div>
-
-    <div id="sidebar">
-        <h2>TopAI_GEN</h2>
-        <div style="font-size:0.8rem; line-height:1.5;">
-            Mode: <span style="color:#00ff41">Génératif</span><br>
-            Moteur: <span style="color:yellow">Python N-Gram</span><br>
-            État: <span id="status">Chargement...</span>
-        </div>
-        <div class="stat-box">
-            Mots appris: <span id="word-count">0</span>
-        </div>
+    <div id="loading-screen">
+        <div style="color:var(--accent); font-size: 24px; font-weight: bold;">TopAI</div>
+        <div style="color:#666; margin-top: 10px;">Éveil des neurones...</div>
     </div>
 
-    <div id="main">
-        <div id="chat-window">
-            <div class="message ai">Bonjour. Je suis prêt à générer du contenu riche basé sur mes données d'apprentissage. Donne-moi un sujet ou un mot clé.</div>
+    <div id="overlay"></div>
+
+    <div id="sidebar">
+        <div style="padding: 20px; border-bottom: 1px solid #333;">
+            <h3>Historique</h3>
+            <button onclick="location.reload()" style="width:100%; padding:10px;">+ Nouvelle Chat</button>
         </div>
-        <div id="input-area">
-            <input type="text" id="user-input" placeholder="Lancer le générateur...">
-            <button id="send-btn" py-click="process_input">GO</button>
-        </div>
+        <ul id="history-list" style="padding:0; list-style:none;"></ul>
+    </div>
+
+    <header>
+        <button id="menu-btn" style="background:none; border:none; color:white; font-size:24px;">☰</button>
+        <div style="font-weight:bold;">TopAI <span style="color:var(--accent)">●</span></div>
+        <div style="width:24px;"></div> </header>
+
+    <div id="chat-window">
+        <div class="message ai">Bonjour ! Je suis TopAI. Tape un mot pour commencer notre discussion illimitée.</div>
+    </div>
+
+    <div id="input-area">
+        <input type="text" id="user-input" placeholder="Message...">
+        <button id="send-btn" py-click="process_input">OK</button>
     </div>
 
     <py-script>
         import random
-        from js import document
+        from js import document, window
 
-        # --- 1. La Base de Connaissance (Le "Corpus") ---
-        # Plus ce texte est long, plus l'IA est "intelligente" et riche.
-        # Tu pourras remplacer ça par le texte d'un livre entier plus tard.
-        corpus = """
-        L'intelligence artificielle est une technologie fascinante qui permet aux machines d'apprendre. 
-        Le futur de l'humanité dépend de notre capacité à coder des algorithmes éthiques et puissants. 
-        TopAI est un projet zinzin créé pour tester les limites du code local. 
-        Les ordinateurs peuvent-ils penser ? C'est une question complexe. 
-        En programmation, la logique est reine, mais l'imagination est le roi.
-        Pour créer un chatbot riche, il faut beaucoup de données. 
-        Le code est une forme d'art moderne qui structure notre réalité numérique.
-        Je suis une entité numérique vivant dans ton navigateur, libre et indépendante.
-        La sauvegarde locale permet de protéger tes données privées contre les serveurs distants.
-        J'aime apprendre de nouvelles phrases et construire des concepts abstraits.
-        """
+        corpus = "L'intelligence artificielle est un outil incroyable. TopAI fonctionne en local. Le futur est ici. C'est un projet de zinzin."
+        
+        # --- Moteur de génération simplifié ---
+        words = corpus.split()
+        chain = {}
+        for i in range(len(words)-1):
+            w1 = words[i]
+            w2 = words[i+1]
+            if w1 not in chain: chain[w1] = []
+            chain[w1].append(w2)
 
-        class GenerativeBrain:
-            def __init__(self):
-                self.markov_chain = {}
-                self.vocabulary = []
-                self.n_gram = 2 # L'IA regarde des groupes de 2 mots pour prédire le 3ème
-
-            def train(self, text):
-                # Nettoyage basique
-                words = text.replace('.', ' .').split()
-                self.vocabulary = list(set(words))
-                
-                # Apprentissage des paires de mots
-                for i in range(len(words) - self.n_gram):
-                    # On crée une clé (ex: "L'intelligence artificielle")
-                    key = tuple(words[i:i + self.n_gram])
-                    next_word = words[i + self.n_gram]
-                    
-                    if key not in self.markov_chain:
-                        self.markov_chain[key] = []
-                    self.markov_chain[key].append(next_word)
-
-            def generate(self, start_text, length=30):
-                # Essayer de trouver une amorce dans le texte utilisateur
-                start_words = start_text.split()
-                current_tuple = None
-                
-                # On cherche si les derniers mots de l'user existent dans notre cerveau
-                if len(start_words) >= self.n_gram:
-                    last_two = tuple(start_words[-self.n_gram:])
-                    if last_two in self.markov_chain:
-                        current_tuple = last_two
-
-                # Si on ne trouve pas, on prend un point de départ au hasard
-                if not current_tuple:
-                    current_tuple = random.choice(list(self.markov_chain.keys()))
-                
-                output = list(current_tuple)
-                
-                # Génération mot après mot
-                for _ in range(length):
-                    if current_tuple in self.markov_chain:
-                        possible_words = self.markov_chain[current_tuple]
-                        next_word = random.choice(possible_words)
-                        output.append(next_word)
-                        
-                        # On décale la fenêtre (on oublie le premier mot, on ajoute le nouveau)
-                        current_tuple = tuple(output[-self.n_gram:])
-                    else:
-                        break # Cul-de-sac neuronal
-                
-                # Reconstruire la phrase proprement
-                return " ".join(output).replace(" .", ".")
-
-        # Initialisation
-        brain = GenerativeBrain()
-        brain.train(corpus)
-
-        # Mise à jour UI
-        document.getElementById("loading").style.display = "none"
-        document.getElementById("status").innerText = "Opérationnel"
-        document.getElementById("status").style.color = "#00ff41"
-        document.getElementById("word-count").innerText = str(len(brain.vocabulary))
-
-        def add_msg(text, type):
-            div = document.createElement("div")
-            div.className = f"message {type}"
-            div.innerText = text
+        def add_msg(text, style):
             chat = document.getElementById("chat-window")
+            div = document.createElement("div")
+            div.className = f"message {style}"
+            div.innerText = text
             chat.appendChild(div)
             chat.scrollTop = chat.scrollHeight
 
         def process_input(*args):
             inp = document.getElementById("user-input")
-            text = inp.value
-            if not text: return
+            val = inp.value.strip()
+            if not val: return
             
-            add_msg(text, "user")
+            add_msg(val, "user")
             inp.value = ""
+
+            # Génération d'une réponse "riche"
+            res = []
+            curr = random.choice(list(chain.keys()))
+            for _ in range(15):
+                res.append(curr)
+                if curr in chain: curr = random.choice(chain[curr])
+                else: break
             
-            # L'IA génère une réponse développée
-            response = brain.generate(text, length=25)
-            add_msg(response, "ai")
+            add_msg(" ".join(res), "ai")
 
-            # Bonus : L'IA apprend de ce que TU lui dis en temps réel !
-            brain.train(text) 
-            document.getElementById("word-count").innerText = str(len(brain.vocabulary))
-
+        # Cacher le loader une fois prêt
+        document.getElementById("loading-screen").style.display = "none"
     </py-script>
 
     <script>
-        // JS Bridge pour gérer la touche Entrée
+        // Menu & UI Logic
+        const menuBtn = document.getElementById('menu-btn');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+
+        function toggleMenu() {
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+        }
+
+        menuBtn.onclick = toggleMenu;
+        overlay.onclick = toggleMenu;
+
         document.getElementById('user-input').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') document.getElementById('send-btn').click();
         });
